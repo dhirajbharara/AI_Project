@@ -37,7 +37,7 @@ chmod +x scripts/*.sh docker/entrypoint.sh
 
 ## Full Local Pipeline (Recommended Order)
 
-Run these in order for a complete demo:
+Run these in order:
 
 ```bash
 # Stage 1 — Model packaging
