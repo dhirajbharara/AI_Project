@@ -1,0 +1,33 @@
+---
+# Node exporter for Prometheus host metrics (CPU, memory, disk)
+
+- name: Deploy node_exporter container
+  community.docker.docker_container:
+    name: node-exporter
+    image: prom/node-exporter:v1.8.2
+    state: started
+    restart_policy: always
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+
+- name: Deploy NVIDIA DCGM exporter (GPU metrics)
+  community.docker.docker_container:
+    name: dcgm-exporter
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
+    state: started
+    restart_policy: always
+    ports:
+      - "9400:9400"
+    device_requests:
+      - driver: nvidia
+        count: -1
+        capabilities: [gpu]
+  when: hardware_type == 'gpu'

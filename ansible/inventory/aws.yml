@@ -1,0 +1,24 @@
+---
+# AWS EC2 dynamic inventory example
+# Production: use amazon.aws.aws_ec2 plugin for auto-discovery
+
+all:
+  children:
+    aws_cloud:
+      vars:
+        deployment_target: aws-ec2
+        ansible_user: ubuntu
+        ansible_ssh_private_key_file: ~/.ssh/llm-pipeline.pem
+      hosts:
+        aws-region-a-01:
+          ansible_host: 10.0.1.10
+          hardware_type: cpu
+          aws_region: us-east-1
+        aws-region-a-02:
+          ansible_host: 10.0.2.10
+          hardware_type: cpu
+          aws_region: us-east-1
+        aws-region-b-01:
+          ansible_host: 10.0.3.10
+          hardware_type: cpu
+          aws_region: eu-west-1

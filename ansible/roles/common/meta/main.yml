@@ -1,0 +1,5 @@
+---
+galaxy_info:
+  role_name: common
+  description: Base host configuration for LLM pipeline
+dependencies: []

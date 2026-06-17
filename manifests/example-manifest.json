@@ -1,0 +1,22 @@
+{
+  "manifest_id": "example-local-development",
+  "model_version": "1.0.0",
+  "model_name": "llama3.2:1b",
+  "deployment_target": "local",
+  "deployment_timestamp": "2026-06-09T00:00:00Z",
+  "git_commit": "example",
+  "git_branch": "main",
+  "hardware_type": "cpu",
+  "environment": "development",
+  "api_endpoint": "http://localhost:8000",
+  "container_image": "multi-arch-llm-pipeline:local",
+  "validation": {
+    "status": "example",
+    "avg_latency_ms": 0,
+    "prompts_tested": ["Hello", "What is Kubernetes?", "What is AI?"]
+  },
+  "rollback": {
+    "previous_manifest": null,
+    "rollback_command": "./scripts/rollback.sh example-local-development"
+  }
+}

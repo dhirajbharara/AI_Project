@@ -1,0 +1,49 @@
+---
+# =============================================================================
+# Master Ansible Playbook — configures all LLM deployment targets
+#
+# Why Ansible for configuration management?
+# - Idempotent: safe to run repeatedly, only changes what's needed
+# - Agentless: uses SSH, no daemon required on target hosts
+# - Complements Terraform: Terraform provisions, Ansible configures
+# - Role-based: reusable modules for Docker, NVIDIA, CUDA setup
+# =============================================================================
+
+- name: Configure LLM Pipeline Hosts
+  hosts: all
+  gather_facts: true
+
+  pre_tasks:
+    - name: Detect hardware type
+      ansible.builtin.import_tasks: ../roles/common/tasks/detect_hardware.yml
+
+  roles:
+    - role: common
+      tags: [common]
+
+    - role: docker
+      tags: [docker]
+
+    - role: nvidia
+      when: hardware_type == 'gpu'
+      tags: [nvidia, gpu]
+
+    - role: llm_runtime
+      tags: [llm_runtime, deploy]
+
+    - role: monitoring
+      tags: [monitoring]
+
+  post_tasks:
+    - name: Verify GPU if GPU node
+      ansible.builtin.import_tasks: ../roles/nvidia/tasks/verify_gpu.yml
+      when: hardware_type == 'gpu'
+
+    - name: Verify deployment health
+      ansible.builtin.uri:
+        url: "http://localhost:8000/ready"
+        status_code: 200
+      register: health_check
+      retries: 10
+      delay: 15
+      until: health_check.status == 200

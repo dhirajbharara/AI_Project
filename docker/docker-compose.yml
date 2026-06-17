@@ -1,0 +1,64 @@
+# Local development and validation stack
+# Usage: docker compose -f docker/docker-compose.yml up --build
+
+services:
+  llm-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEPLOYMENT_TARGET=local
+      - HARDWARE_TYPE=cpu
+      - MODEL_NAME=llama3.2:1b
+      - MODEL_VERSION=1.0.0
+    volumes:
+      # Persist only model files on host.
+      # Keep /home/appuser/.ollama (keys, metadata) inside container to avoid host permission issues.
+      - ../data/ollama/models:/home/appuser/.ollama/models
+    deploy:
+      resources:
+        reservations:
+          devices: []
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s
+
+  # Uncomment for GPU local testing (requires nvidia-container-toolkit)
+  # llm-api-gpu:
+  #   extends: llm-api
+  #   environment:
+  #     - HARDWARE_TYPE=gpu
+  #     - GPU_LAYERS=35
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports:
+      - "9090:9090"
+    volumes:
+      # Use local scrape targets for laptop runs
+      - ../monitoring/prometheus/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro

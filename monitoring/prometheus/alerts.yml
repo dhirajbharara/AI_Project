@@ -1,0 +1,35 @@
+groups:
+  - name: llm_pipeline_alerts
+    rules:
+      - alert: LLMModelUnavailable
+        expr: llm_model_available == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM model is not available"
+          description: "Model availability gauge is 0 for {{ $labels.instance }}"
+
+      - alert: LLMHighLatency
+        expr: histogram_quantile(0.95, rate(llm_inference_latency_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM inference p95 latency exceeds 30s"
+
+      - alert: LLMInferenceErrors
+        expr: rate(llm_inference_requests_total{status="error"}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High LLM inference error rate"
+
+      - alert: DeploymentValidationFailed
+        expr: llm_ollama_reachable == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ollama runtime unreachable"

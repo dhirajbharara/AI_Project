@@ -1,0 +1,23 @@
+---
+# Auto-detect CPU vs GPU node
+# Sets hardware_type fact used by subsequent roles
+
+- name: Check for NVIDIA GPU
+  ansible.builtin.command: nvidia-smi --query-gpu=name --format=csv,noheader
+  register: nvidia_check
+  failed_when: false
+  changed_when: false
+
+- name: Set hardware type to GPU
+  ansible.builtin.set_fact:
+    hardware_type: gpu
+  when: nvidia_check.rc == 0 and nvidia_check.stdout | trim | length > 0
+
+- name: Set hardware type to CPU
+  ansible.builtin.set_fact:
+    hardware_type: cpu
+  when: nvidia_check.rc != 0 or nvidia_check.stdout | trim | length == 0
+
+- name: Log detected hardware
+  ansible.builtin.debug:
+    msg: "Detected hardware type: {{ hardware_type }}"

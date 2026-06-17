@@ -1,0 +1,148 @@
+# =============================================================================
+# Cloud VM Deployment Workflow (AWS / Azure)
+#
+# Stages: Terraform Apply → Ansible Config → Deploy → Validate → Manifest → Notify
+# =============================================================================
+name: Deploy — Cloud VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Cloud target"
+        required: true
+        type: choice
+        options:
+          - aws-region-a
+          - aws-region-b
+          - azure
+      hardware_type:
+        description: "Hardware type"
+        required: true
+        type: choice
+        options:
+          - cpu
+          - gpu
+
+env:
+  CONTAINER_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+jobs:
+  terraform-apply:
+    name: "Terraform Apply"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    outputs:
+      api_endpoint: ${{ steps.tf-output.outputs.api_endpoint }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform Init
+        working-directory: terraform/environments/${{ inputs.target }}
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/${{ inputs.target }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/${{ inputs.target }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Capture outputs
+        id: tf-output
+        working-directory: terraform/environments/${{ inputs.target }}
+        run: echo "api_endpoint=$(terraform output -raw api_endpoint)" >> $GITHUB_OUTPUT
+
+  ansible-configure:
+    name: "Ansible Configuration"
+    runs-on: ubuntu-latest
+    needs: terraform-apply
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: pip install ansible docker
+
+      - name: Run Ansible playbook
+        run: |
+          ansible-playbook \
+            -i ansible/inventory/aws.yml \
+            ansible/playbooks/site.yml \
+            -e "container_image=${{ env.CONTAINER_IMAGE }}" \
+            -e "hardware_type=${{ inputs.hardware_type }}" \
+            -e "deployment_target=${{ inputs.target }}" \
+            -e "model_version=${{ github.sha }}"
+
+  deploy:
+    name: "Rolling Deploy"
+    runs-on: ubuntu-latest
+    needs: ansible-configure
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rolling deployment
+        run: |
+          chmod +x scripts/rollout.sh
+          ./scripts/rollout.sh ansible/inventory/aws.yml
+        env:
+          CONTAINER_IMAGE: ${{ env.CONTAINER_IMAGE }}
+          MODEL_VERSION: ${{ github.sha }}
+
+  validate:
+    name: "Deployment Validation"
+    runs-on: ubuntu-latest
+    needs: [deploy, terraform-apply]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run validation
+        run: |
+          chmod +x scripts/validate-deployment.sh
+          ./scripts/validate-deployment.sh "${{ needs.terraform-apply.outputs.api_endpoint }}"
+        env:
+          MAX_LATENCY_MS: 60000
+
+  update-manifest:
+    name: "Update Manifest"
+    runs-on: ubuntu-latest
+    needs: [validate, terraform-apply]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate deployment manifest
+        run: |
+          chmod +x scripts/generate-manifest.sh
+          ./scripts/generate-manifest.sh
+        env:
+          DEPLOYMENT_TARGET: ${{ inputs.target }}
+          HARDWARE_TYPE: ${{ inputs.hardware_type }}
+          ENVIRONMENT: production
+          MODEL_VERSION: ${{ github.sha }}
+          API_ENDPOINT: ${{ needs.terraform-apply.outputs.api_endpoint }}
+          CONTAINER_IMAGE: ${{ env.CONTAINER_IMAGE }}
+          VALIDATION_STATUS: passed
+
+      - name: Commit manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifests/
+          git commit -m "deploy: manifest for ${{ inputs.target }} @ ${{ github.sha }}" || true
+          git push || true
+
+  notify-success:
+    name: "Notify Success"
+    runs-on: ubuntu-latest
+    needs: update-manifest
+    if: success()
+    steps:
+      - name: Deployment notification
+        run: |
+          echo "✅ Deployment successful"
+          echo "Target: ${{ inputs.target }}"
+          echo "Commit: ${{ github.sha }}"

@@ -1,0 +1,59 @@
+---
+# NVIDIA Driver + CUDA installation for GPU inference
+#
+# Why CUDA is needed:
+# - LLMs perform matrix multiplication (billions of operations per token)
+# - GPUs have thousands of cores optimized for parallel matrix math
+# - CUDA is NVIDIA's API that lets software (Ollama) use the GPU
+# - Without CUDA: model runs on CPU only (10-100x slower for large models)
+
+- name: Check if NVIDIA driver is installed
+  ansible.builtin.command: nvidia-smi
+  register: nvidia_smi
+  failed_when: false
+  changed_when: false
+
+- name: Install NVIDIA driver (Ubuntu)
+  when: nvidia_smi.rc != 0
+  block:
+    - name: Install NVIDIA driver packages
+      ansible.builtin.apt:
+        name:
+          - nvidia-driver-535
+          - nvidia-utils-535
+        state: present
+        update_cache: true
+
+    - name: Reboot to load NVIDIA driver
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+
+- name: Install NVIDIA Container Toolkit
+  block:
+    - name: Add NVIDIA Container Toolkit GPG key
+      ansible.builtin.apt_key:
+        url: https://nvidia.github.io/libnvidia-container/gpgkey
+        state: present
+
+    - name: Add NVIDIA Container Toolkit repository
+      ansible.builtin.shell: |
+        curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+        tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+      args:
+        creates: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+    - name: Install NVIDIA Container Toolkit
+      ansible.builtin.apt:
+        name: nvidia-container-toolkit
+        state: present
+        update_cache: true
+
+    - name: Configure Docker to use NVIDIA runtime
+      ansible.builtin.command: nvidia-ctk runtime configure --runtime=docker
+      notify: Restart Docker
+
+- name: Install CUDA toolkit (optional, for development)
+  ansible.builtin.apt:
+    name: nvidia-cuda-toolkit
+    state: present
+  when: install_cuda_toolkit | default(false)

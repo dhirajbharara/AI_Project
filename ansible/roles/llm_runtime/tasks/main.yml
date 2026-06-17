@@ -1,0 +1,77 @@
+---
+# Deploy the LLM container — same image on all targets
+
+- name: Load deployment configuration
+  ansible.builtin.slurp:
+    src: /etc/llm-pipeline/config.env
+  register: config_file
+
+- name: Parse config env
+  ansible.builtin.set_fact:
+    llm_config: "{{ ('{' + (config_file.content | b64decode).split('\n') | select('match', '.+=.+') | map('regex_replace', '^([^=]+)=(.*)$', '\"\\1\": \"\\2\"') | join(',') + '}') }}"
+
+- name: Pull LLM container image
+  community.docker.docker_image:
+    name: "{{ container_image | default('ghcr.io/org/multi-arch-llm-pipeline:latest') }}"
+    source: pull
+    force_source: "{{ force_image_pull | default(false) }}"
+
+- name: Stop existing LLM container
+  community.docker.docker_container:
+    name: llm-pipeline
+    state: absent
+  ignore_errors: true
+
+- name: Deploy LLM container (CPU mode)
+  community.docker.docker_container:
+    name: llm-pipeline
+    image: "{{ container_image | default('ghcr.io/org/multi-arch-llm-pipeline:latest') }}"
+    state: started
+    restart_policy: always
+    ports:
+      - "8000:8000"
+    env:
+      HARDWARE_TYPE: "{{ hardware_type }}"
+      DEPLOYMENT_TARGET: "{{ deployment_target }}"
+      ENVIRONMENT: "{{ environment | default('production') }}"
+      MODEL_NAME: "{{ model_name | default('llama3.2:1b') }}"
+      MODEL_VERSION: "{{ model_version | default('1.0.0') }}"
+      CPU_THREADS: "{{ cpu_threads | default(4) | string }}"
+    volumes:
+      - /var/lib/llm-models:/home/appuser/.ollama/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+  when: hardware_type == 'cpu'
+
+- name: Deploy LLM container (GPU mode)
+  community.docker.docker_container:
+    name: llm-pipeline
+    image: "{{ container_image | default('ghcr.io/org/multi-arch-llm-pipeline:latest') }}"
+    state: started
+    restart_policy: always
+    ports:
+      - "8000:8000"
+    env:
+      HARDWARE_TYPE: gpu
+      DEPLOYMENT_TARGET: "{{ deployment_target }}"
+      ENVIRONMENT: "{{ environment | default('production') }}"
+      MODEL_NAME: "{{ model_name | default('llama3.2:1b') }}"
+      MODEL_VERSION: "{{ model_version | default('1.0.0') }}"
+      GPU_LAYERS: "{{ gpu_layers | default(35) | string }}"
+    volumes:
+      - /var/lib/llm-models:/home/appuser/.ollama/models
+    device_requests:
+      - driver: nvidia
+        count: -1
+        capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+  when: hardware_type == 'gpu'

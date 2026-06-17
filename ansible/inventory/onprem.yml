@@ -1,0 +1,24 @@
+---
+# On-premises GPU cluster inventory
+
+all:
+  children:
+    onprem_gpu:
+      vars:
+        deployment_target: onprem-gpu
+        hardware_type: gpu
+        ansible_user: admin
+      hosts:
+        gpu-node-01:
+          ansible_host: 192.168.10.11
+        gpu-node-02:
+          ansible_host: 192.168.10.12
+
+    onprem_cpu:
+      vars:
+        deployment_target: onprem-cpu
+        hardware_type: cpu
+        ansible_user: admin
+      hosts:
+        cpu-node-01:
+          ansible_host: 192.168.10.21

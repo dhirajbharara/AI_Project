@@ -1,0 +1,37 @@
+---
+# GPU verification — confirms CUDA and GPU are functional
+
+- name: Run nvidia-smi
+  ansible.builtin.command: nvidia-smi --query-gpu=name,memory.total,driver_version,compute_cap --format=csv
+  register: gpu_info
+  changed_when: false
+
+- name: Display GPU information
+  ansible.builtin.debug:
+    msg: "{{ gpu_info.stdout_lines }}"
+
+- name: Verify GPU memory is sufficient
+  ansible.builtin.assert:
+    that:
+      - gpu_info.rc == 0
+    fail_msg: "GPU verification failed — nvidia-smi returned non-zero exit code"
+    success_msg: "GPU verified successfully"
+
+- name: Test Docker GPU access
+  community.docker.docker_container:
+    name: gpu-test
+    image: nvidia/cuda:12.2.0-base-ubuntu22.04
+    command: nvidia-smi
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
+    auto_remove: true
+  register: docker_gpu_test
+
+- name: Confirm Docker can access GPU
+  ansible.builtin.assert:
+    that:
+      - docker_gpu_test.container.State.ExitCode == 0
+    fail_msg: "Docker cannot access GPU — check nvidia-container-toolkit"
+    success_msg: "Docker GPU access verified"

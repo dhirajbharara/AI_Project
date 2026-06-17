@@ -1,0 +1,6 @@
+---
+- name: Restart LLM container
+  community.docker.docker_container:
+    name: llm-pipeline
+    state: started
+    restart: true

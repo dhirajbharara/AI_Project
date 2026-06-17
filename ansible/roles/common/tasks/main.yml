@@ -1,0 +1,36 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - jq
+      - htop
+      - python3-pip
+    state: present
+
+- name: Create LLM pipeline config directory
+  ansible.builtin.file:
+    path: /etc/llm-pipeline
+    state: directory
+    mode: "0755"
+
+- name: Write deployment configuration
+  ansible.builtin.template:
+    src: config.env.j2
+    dest: /etc/llm-pipeline/config.env
+    mode: "0644"
+  notify: Restart LLM container
+
+- name: Create model cache directory
+  ansible.builtin.file:
+    path: /var/lib/llm-models
+    state: directory
+    mode: "0755"

@@ -1,0 +1,12 @@
+{
+  "model_name": "llama3.2:1b",
+  "model_version": "1.0.0",
+  "runtime": "ollama",
+  "format": "gguf",
+  "packaged_at": "2026-06-16T16:30:50Z",
+  "size_estimate_mb": 1300,
+  "hardware_requirements": {
+    "cpu_min_ram_gb": 4,
+    "gpu_min_vram_gb": 4
+  }
+}
